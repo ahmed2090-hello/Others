@@ -1,0 +1,111 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "FlyGUI"
+screenGui.ResetOnSpawn = false
+
+local flyButton = Instance.new("TextButton")
+flyButton.Text = "Fly Fly Fly"
+flyButton.Size = UDim2.new(0, 150, 0, 50)
+flyButton.Position = UDim2.new(0, 20, 0, 20)
+flyButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+flyButton.TextColor3 = Color3.new(1, 1, 1)
+flyButton.Parent = screenGui
+
+local speedBox = Instance.new("TextBox")
+speedBox.PlaceholderText = "Enter Fly Speed"
+speedBox.Size = UDim2.new(0, 150, 0, 40)
+speedBox.Position = UDim2.new(0, 20, 0, 80)
+speedBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+speedBox.TextColor3 = Color3.new(1, 1, 1)
+speedBox.Parent = screenGui
+
+-- Platform Detection
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- Fly variables
+local flying = false
+local flySpeed = 50
+local bodyGyro, bodyVel
+
+-- Create platform bounce effect for mobile hover
+local function hoverEffect(part)
+	local startY = part.Position.Y
+	coroutine.wrap(function()
+		while flying and isMobile do
+			part.Position = Vector3.new(part.Position.X, startY + math.sin(tick() * 6) * 1.5, part.Position.Z)
+			task.wait()
+		end
+	end)()
+end
+
+-- Fly Function
+local function startFlying()
+	local char = player.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+	local root = char:WaitForChild("HumanoidRootPart")
+
+	flying = true
+	bodyGyro = Instance.new("BodyGyro")
+	bodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+	bodyGyro.P = 9e4
+	bodyGyro.CFrame = root.CFrame
+	bodyGyro.Parent = root
+
+	bodyVel = Instance.new("BodyVelocity")
+	bodyVel.Velocity = Vector3.new(0, 0, 0)
+	bodyVel.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+	bodyVel.Parent = root
+
+	local camera = workspace.CurrentCamera
+	local moveVector = Vector3.zero
+
+	RunService:BindToRenderStep("Flying", Enum.RenderPriority.Input.Value, function()
+		bodyGyro.CFrame = camera.CFrame
+
+		if isMobile then
+			-- For mobile: Move forward in the camera direction
+			moveVector = camera.CFrame.LookVector
+		else
+			-- For PC: WASD or Arrow key control
+			local input = Vector3.new()
+			if UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.Up) then input = input + Vector3.new(0, 0, -1) end
+			if UserInputService:IsKeyDown(Enum.KeyCode.S) or UserInputService:IsKeyDown(Enum.KeyCode.Down) then input = input + Vector3.new(0, 0, 1) end
+			if UserInputService:IsKeyDown(Enum.KeyCode.A) or UserInputService:IsKeyDown(Enum.KeyCode.Left) then input = input + Vector3.new(-1, 0, 0) end
+			if UserInputService:IsKeyDown(Enum.KeyCode.D) or UserInputService:IsKeyDown(Enum.KeyCode.Right) then input = input + Vector3.new(1, 0, 0) end
+			moveVector = camera.CFrame:VectorToWorldSpace(input)
+		end
+
+		bodyVel.Velocity = moveVector.Unit * flySpeed
+	end)
+
+	if isMobile then
+		hoverEffect(root)
+	end
+end
+
+local function stopFlying()
+	flying = false
+	RunService:UnbindFromRenderStep("Flying")
+	if bodyGyro then bodyGyro:Destroy() end
+	if bodyVel then bodyVel:Destroy() end
+end
+
+-- Button Events
+flyButton.MouseButton1Click:Connect(function()
+	flySpeed = tonumber(speedBox.Text) or 50
+	if not flying then
+		startFlying()
+		flyButton.Text = "Unfly"
+	else
+		stopFlying()
+		flyButton.Text = "Fly Fly Fly"
+	end
+end)
